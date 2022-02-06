@@ -9,6 +9,12 @@
     const fieldColumn = new Array(column).fill(0)
     field[i] = fieldColumn
   }
+
+  field[0][0] = 1
+  field[1][0] = 1
+  field[2][0] = 1
+  field[3][0] = 1
+
 </script>
 
 <template>
@@ -28,7 +34,9 @@
           v-for="(col, x) in row"
           :key="()=>`${x}${y}`"
           class="block"
-        />
+        >
+          {{ col }}
+        </td>
       </tr>
     </table>
   </div>
