@@ -1,8 +1,9 @@
 <script lang="ts" setup>
- import { reactive } from "vue";
+ import { onBeforeUnmount, onMounted, reactive } from "vue";
  import { Tetromino, TETROMINO_TYPE } from '../common/Tetromino';
- import { Field } from '../common/Field';
- 
+ import { Field } from '../common/Field' 
+ import TetrominoPreviewComponent from '../components/TetrominoPreviewComponent.vue';
+
  let staticField = new Field();
  const tetris = reactive({
    field: new Field(),
@@ -10,6 +11,7 @@
  const tetromino = reactive({
    current: Tetromino.random(),
    position: { x: 3, y: 0 },
+   next: Tetromino.random(),
  });
 
 const classBlockColor = (_x: number, _y: number): string => {
@@ -50,20 +52,53 @@ const nextTetrisField = () => {
   staticField = new Field(tetris.field.data);
   tetris.field = Field.deepCopy(staticField);
 
-  tetromino.current = Tetromino.random();
+  tetromino.current = tetromino.next;
+  tetromino.next = Tetromino.random();
   tetromino.position = { x: 3, y: 0 };
 }
 
-setInterval(() => {
-  tetris.field = Field.deepCopy(staticField);
-
-  if(canDropCurrentTetromino()) {
-  tetromino.position.y++;
-} else {
-  nextTetrisField();
+const onKeyDown = (e: KeyboardEvent) => {
+  switch (e.key) {
+    case "Down":
+    case "ArrowDown":
+      if(canDropCurrentTetromino()) {
+        tetromino.position.y++;
+         resetDrop();
+      } else {
+        nextTetrisField();
+      }
+      break;
+  }
 }
-}, 1 * 1000);
-tetris.field.update(tetromino.current.data, tetromino.position);
+
+onMounted(function() {
+  document.addEventListener('keydown', onKeyDown);
+});
+onBeforeUnmount(function() {
+  document.removeEventListener('keydown', onKeyDown);
+});
+
+
+const resetDropInterval = () => {
+  let intervalId = -1;
+
+  return () => {
+    if (intervalId !== -1) clearInterval(intervalId);
+
+    intervalId = setInterval(() => {
+    tetris.field = Field.deepCopy(staticField);
+
+    if(canDropCurrentTetromino()) {
+      tetromino.position.y++;
+    } else {
+      nextTetrisField();
+    }
+  }, 1 * 1000)
+  };
+};
+
+const resetDrop = resetDropInterval();
+resetDrop();
   
 </script>
 
@@ -72,22 +107,27 @@ tetris.field.update(tetromino.current.data, tetromino.position);
   <h2>ユーザー名: {{ $route.query.name }}</h2>
 
   <div class="container">
-    <table
-      class="field"
-      style="border-collapse: collapse"
-    >
-      <tr
-        v-for="(row, y) in tetris.field.data"
-        :key="y"
+    <div class="tetris">
+      <table
+        class="field"
+        style="border-collapse: collapse"
       >
-        <td
-          v-for="(col, x) in row"
-          :key="()=>`${x}${y}`"
-          class="block"
-          :class="classBlockColor(x, y)"
-        />
-      </tr>
-    </table>
+        <tr
+          v-for="(row, y) in tetris.field.data"
+          :key="y"
+        >
+          <td
+            v-for="(col, x) in row"
+            :key="()=>`${x}${y}`"
+            class="block"
+            :class="classBlockColor(x, y)"
+          />
+        </tr>
+      </table>
+    </div>
+    <div class="information">
+      <TetrominoPreviewComponent :tetromino="tetromino.next.data" />
+    </div>
   </div>
 </template>
 
@@ -127,6 +167,10 @@ tetris.field.update(tetromino.current.data, tetromino.position);
     }
     &-z {
       background: #e74c3c;
+    }
+     /** テトリスに関する情報をテトリスのフィールドの右に表示する **/
+    .information {
+      margin-left: 0.5em;
     }
   }
 
