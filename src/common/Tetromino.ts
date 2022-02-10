@@ -51,6 +51,19 @@ export class Tetromino {
     this.type = type;
   }
 
+   // `num` 回 90度テトリミノの二次元行列 `data` を回転させた結果 (二次元配列) を取得する関数
+   static rotate(num: number, data: number[][]): number[][] {
+    let tetromino: number[][] = data;
+    for (let i = 0; i < num; i++) {
+      // 一行に存在する列を全て反転させて新たな二次元配列を作成する (90度回転させる)
+      tetromino = tetromino[0].map((_, index) =>
+        tetromino.map((row) => row[index]).reverse()
+      );
+    }
+
+    return tetromino;
+  }
+
   // 4-2 で定義した、各テトリミノに対応した CSS のクラス名 (識別子) を取得する関数
   static id(type: TETROMINO_TYPE): string {
     switch(type) {
