@@ -1,43 +1,84 @@
 <script lang="ts" setup>
- import { onBeforeUnmount, onMounted, reactive } from "vue";
- import { Tetromino, TETROMINO_TYPE } from '../common/Tetromino';
- import { Field } from '../common/Field' 
- import TetrominoPreviewComponent from '../components/TetrominoPreviewComponent.vue';
+import { onBeforeUnmount, reactive, watch } from "vue";
+import { Tetromino, TETROMINO_TYPE } from '../common/Tetromino';
+import { Field } from '../common/Field' 
+import TetrominoPreviewComponent from '../components/TetrominoPreviewComponent.vue';
 
- let staticField = new Field();
- const tetris = reactive({
-   field: new Field(),
- });
- const tetromino = reactive({
-   current: Tetromino.random(),
-   position: { x: 3, y: 0 },
-   rotate: 0,
-   next: Tetromino.random(),
- });
+const PLAY_STATUS = {
+  GAMESTART: 1,
+  PLAYING: 2,
+  GAMEOVER: 3
+} as const;
 
- const currentTetrominoData = () => {
-   return Tetromino.rotate(tetromino.rotate, tetromino.current.data);
- }
+export type PLAY_STATUS = typeof PLAY_STATUS[keyof typeof PLAY_STATUS]
+
+let staticField = new Field();
+
+const gameStatus = reactive({ gameStatus: PLAY_STATUS.GAMESTART as PLAY_STATUS})
+const isStandby = () => gameStatus.gameStatus !== PLAY_STATUS.PLAYING;
+const gameStart = () => gameStatus.gameStatus = PLAY_STATUS.PLAYING;
+
+const tetris = reactive({
+  field: new Field(),
+  score: 0
+});
+
+watch(gameStatus, (currentState) => {
+  switch(currentState.gameStatus as PLAY_STATUS) {
+    case PLAY_STATUS.GAMESTART:
+      break;
+    case PLAY_STATUS.PLAYING:
+      document.addEventListener('keydown', onKeyDown);
+
+      staticField = new Field();
+      tetris.field = new Field();
+
+      tetromino.current = Tetromino.random();
+      tetromino.next = Tetromino.random();
+
+      tetris.score = 0;
+      resetDrop();
+
+      break;
+    case PLAY_STATUS.GAMEOVER:
+      document.removeEventListener('keydown', onKeyDown);
+
+      tetromino.next = Tetromino.empty();
+      break;
+      
+  }
+})
+
+const tetromino = reactive({
+  current: Tetromino.empty(),
+  position: { x: 3, y: 0 },
+  rotate: 0,
+  next: Tetromino.empty(),
+});
+
+const currentTetrominoData = () => {
+  return Tetromino.rotate(tetromino.rotate, tetromino.current.data);
+}
 
 const classBlockColor = (_x: number, _y: number): string => {
-   const type = tetris.field.data[_y][_x];
-   if(type > 0) {
-     return Tetromino.id(type as TETROMINO_TYPE);
-   }
- 
-   const { x, y } = tetromino.position;
-   const data = currentTetrominoData();
- 
-   if (y <= _y && _y < y + data.length) {
-     const cols = data[_y - y];
-     if (x <= _x && _x < x + cols.length) {
-       if (cols[_x - x] > 0) {
-         return Tetromino.id(cols[_x - x] as TETROMINO_TYPE);
-       }
-     }
-   }
- 
-   return "";
+  const type = tetris.field.data[_y][_x];
+  if(type > 0) {
+    return Tetromino.id(type as TETROMINO_TYPE);
+  }
+
+  const { x, y } = tetromino.position;
+  const data = currentTetrominoData();
+
+  if (y <= _y && _y < y + data.length) {
+    const cols = data[_y - y];
+    if (x <= _x && _x < x + cols.length) {
+      if (cols[_x - x] > 0) {
+        return Tetromino.id(cols[_x - x] as TETROMINO_TYPE);
+      }
+    }
+  }
+
+  return "";
 }
 
 const canDropCurrentTetromino = (): boolean => {
@@ -54,14 +95,21 @@ const nextTetrisField = () => {
   const position = tetromino.position;
 
   tetris.field.update(data, position);
+  const { field, score } = deleteLine();
 
-  staticField = new Field(tetris.field.data);
+  staticField = new Field(field);
   tetris.field = Field.deepCopy(staticField);
+  tetris.score += score;
 
   tetromino.current = tetromino.next;
   tetromino.next = Tetromino.random();
   tetromino.rotate = 0;
   tetromino.position = { x: 3, y: 0 };
+
+  if(!canDropCurrentTetromino()){
+    gameStatus.gameStatus = PLAY_STATUS.GAMEOVER as PLAY_STATUS;
+    resetDrop(true);
+  }
 }
 
 const onKeyDown = (e: KeyboardEvent) => {
@@ -117,9 +165,23 @@ const onKeyDown = (e: KeyboardEvent) => {
   }
 }
 
-onMounted(function() {
-  document.addEventListener('keydown', onKeyDown);
-});
+const deleteLine = () => {
+  let score = 0;
+  const field = tetris.field.data.filter((row) => {
+    if (row.every(col => col > 0)) {
+      score++;
+      return false;
+    }
+    return true;
+  });
+
+  for (let i = 0; i < score; i++) {
+    field.unshift(new Array(field[0].length).fill(0));
+  }
+
+  return { score, field };
+};
+
 onBeforeUnmount(function() {
   document.removeEventListener('keydown', onKeyDown);
 });
@@ -128,8 +190,9 @@ onBeforeUnmount(function() {
 const resetDropInterval = () => {
   let intervalId = -1;
 
-  return () => {
+  return (gameover = false) => {
     if (intervalId !== -1) clearInterval(intervalId);
+    if(gameover) return;
 
     intervalId = setInterval(() => {
     tetris.field = Field.deepCopy(staticField);
@@ -144,7 +207,6 @@ const resetDropInterval = () => {
 };
 
 const resetDrop = resetDropInterval();
-resetDrop();
   
 </script>
 
@@ -173,6 +235,16 @@ resetDrop();
     </div>
     <div class="information">
       <TetrominoPreviewComponent :tetromino="tetromino.next.data" />
+      <ul class="data">
+        <li>スコア: {{ tetris.score }}</li>
+        <li v-if="isStandby()">
+          <button
+            @click.self.stop="gameStart"
+          >
+            ゲームスタート
+          </button>
+        </li>
+      </ul>
     </div>
   </div>
 </template>
@@ -217,6 +289,14 @@ resetDrop();
      /** テトリスに関する情報をテトリスのフィールドの右に表示する **/
     .information {
       margin-left: 0.5em;
+      position: relative;
+      ul.data {
+        list-style: none;
+        position: absolute;
+        font-size: 1.3em;
+        padding-left: 0;
+        bottom: 0;
+      }
     }
   }
 

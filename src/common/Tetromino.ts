@@ -96,6 +96,11 @@ export class Tetromino {
 
     return new Tetromino(type as TETROMINO_TYPE);
   }
+
+  // 空のテトリミノを取得する
+  static empty(): Tetromino {
+    return new Tetromino(0 as TETROMINO_TYPE);
+  }
 }
 
 
